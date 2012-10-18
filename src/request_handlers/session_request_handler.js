@@ -154,6 +154,9 @@ ghostdriver.SessionReqHand = function(session) {
         } else if (req.urlParsed.file === _const.SOURCE && req.method === "GET") {
             _getSourceCommand(req, res);
             return;
+        } else if (req.urlParsed.file === _const.ALERT) {
+            _doAlertCommands(req, res);
+            return;
         } else if (req.urlParsed.file === _const.MOVE_TO && req.method === "POST") {
             _postMouseMoveToCommand(req, res);
             return;
@@ -187,6 +190,15 @@ ghostdriver.SessionReqHand = function(session) {
         return function (status) {
             res.success(_session.getId());
         };
+    },
+
+    _doAlertCommands = function(req, res) {
+            throw _errors.createFailedCommandEH(
+                    _errors.FAILED_CMD_STATUS.NO_ALERT_OPEN_ERROR,   //< error name
+                    "Ghostdriver always returns no alert present.",  //< error message
+                    req,                                        //< request
+                    _session,                                   //< session
+                    "SessionReqHand");                          //< class name
     },
 
     _doWindowHandleCommands = function(req, res) {
