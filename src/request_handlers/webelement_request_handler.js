@@ -1,7 +1,7 @@
 /*
-This file is part of the GhostDriver project from Neustar inc.
+This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 
-Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com / detronizator@gmail.com>
+Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 Copyright (c) 2012, Alex Anderson <@alxndrsn>
 All rights reserved.
 
@@ -163,21 +163,32 @@ ghostdriver.WebElementReqHand = function(idOrElement, session) {
         res.respondBasedOnResult(_session, req, locationRes);
     },
 
-    _getLocationInViewCommand = function(req, res) {
-        var scrollRes = _protoParent.getSessionCurrWindow.call(this, _session, req).evaluate(
-                require("./webdriver_atoms.js").get("scroll_into_view"),
-                _getJSON());
+    _getLocationInViewResult = function (req) {
+        return _protoParent.getSessionCurrWindow.call(this, _session, req).evaluate(
+            require("./webdriver_atoms.js").get("execute_script"),
+            "return (" + require("./webdriver_atoms.js").get("get_location_in_view") + ")(arguments[0]);",
+            [_getJSON()]);
+    },
 
-        // console.log("Scrolling into View result: "+JSON.stringify(scrollRes));
+    _getLocationInView = function (req) {
+        var result = _getLocationInViewResult(req);
 
-        scrollRes = JSON.parse(scrollRes);
-        if (scrollRes && scrollRes.status === 0) {
-            res.respondBasedOnResult(_session, req, _getLocationResult(req));
-            return;
+        // console.log("Location: "+JSON.stringify(result));
+
+        if (result.status === 0) {
+            return result.value;
+        } else {
+            return null;
         }
+    },
+
+    _getLocationInViewCommand = function (req, res) {
+        var locationInViewRes = _getLocationInViewResult(req);
+
+        // console.log("Scrolling into View result: "+JSON.stringify(locationInViewRes));
 
         // Something went wrong: report the error
-        res.respondBasedOnResult(_session, req, scrollRes);
+        res.respondBasedOnResult(_session, req, locationInViewRes);
     },
 
     _getSizeResult = function (req) {
@@ -206,24 +217,83 @@ ghostdriver.WebElementReqHand = function(idOrElement, session) {
         res.respondBasedOnResult(_session, req, sizeRes);
     },
 
+    _normalizeSpecialChars = function(str) {
+        var resultStr = "",
+            i, ilen;
+
+        for(i = 0, ilen = str.length; i < ilen; ++i) {
+            switch(str[i]) {
+                case '\b':
+                    resultStr += '\uE003';  //< Backspace
+                    break;
+                case '\t':
+                    resultStr += '\uE004';  // Tab
+                    break;
+                case '\r':
+                    resultStr += '\uE006';  // Return
+                    if (str.length > i+1 && str[i+1] === '\n') {    //< Return on Windows
+                        ++i; //< skip the next '\n'
+                    }
+                    break;
+                case '\n':
+                    resultStr += '\uE006';  // Return
+                    break;
+                default:
+                    resultStr += str[i];
+                    break;
+            }
+        }
+
+        return resultStr;
+    },
+
     _postValueCommand = function(req, res) {
         var postObj = JSON.parse(req.post),
-            typeAtom = require("./webdriver_atoms.js").get("type"),
-            typeRes;
+            currWindow = _protoParent.getSessionCurrWindow.call(this, _session, req),
+            typeRes,
+            text;
 
         // Ensure all required parameters are available
         if (typeof(postObj) === "object" && typeof(postObj.value) === "object") {
-            var text = postObj.value.join("");
-            text = text.replace(/[\b]/g, '\uE003').           // Backspace
-                        replace(/\t/g, '\uE004').             // Tab
-                        replace(/(\r\n|\n|\r)/g, '\uE006');   // Return
-            // Execute the "type" atom
-            typeRes = _protoParent.getSessionCurrWindow.call(this, _session, req).evaluate(
-                typeAtom,
-                _getJSON(),
-                text.split(""));
+            // Normalize input: some binding might send an array of single characters
+            text = postObj.value.join("");
 
-            res.respondBasedOnResult(_session, req, typeRes);
+            // Detect if it's an Input File type (that requires special behaviour)
+            if (_getTagName(currWindow).toLowerCase() === "input" &&
+                _getAttribute(currWindow, "type").toLowerCase() === "file") {
+
+                // Register a one-shot-callback to fill the file picker once invoked by clicking on the element
+                currWindow.setOneShotCallback("onFilePicker", function(oldFile) {
+                    // Send the response as soon as we are done setting the value in the "input[type=file]" element
+                    setTimeout(function() {
+                        res.respondBasedOnResult(_session, req, typeRes);
+                    }, 1);
+
+                    return text;
+                });
+
+                // Click on the element!
+                typeRes = currWindow.evaluate(require("./webdriver_atoms.js").get("click"), _getJSON());
+            } else {
+                // Normalize for special characters
+                text = _normalizeSpecialChars(text);
+
+                // Execute the "type" atom on an empty string only to force focus to the element.
+                // TODO: This is a hack that needs to be corrected with a proper method to set focus.
+                typeRes = currWindow.evaluate(require("./webdriver_atoms.js").get("type"), _getJSON(), "");
+
+                // Send keys to the page, using Native Events
+                _session.inputs.sendKeys(_session, text);
+
+                // Only clear the modifier keys if this was called using element.sendKeys().
+                // Calling this from the Advanced Interactions API doesn't clear the modifier keys.
+                if (req.urlParsed.file === _const.VALUE) {
+                    _session.inputs.clearModifierKeys(_session);
+                }
+
+                // Return the result of this typing
+                res.respondBasedOnResult(_session, req, typeRes);
+            }
             return;
         }
 
@@ -286,37 +356,49 @@ ghostdriver.WebElementReqHand = function(idOrElement, session) {
     },
 
     _postSubmitCommand = function(req, res) {
-        var submitRes,
+        var currWindow = _protoParent.getSessionCurrWindow.call(this, _session, req),
+            submitRes,
             abortCallback = false;
 
-        // Listen for the page to Finish Loading after the submit
-        _protoParent.getSessionCurrWindow.call(this, _session, req).setOneShotCallback("onLoadFinished", function(status) {
+        currWindow.execFuncAndWaitForLoad(function() {
+            // do the submit
+            submitRes = currWindow.evaluate(require("./webdriver_atoms.js").get("submit"), _getJSON());
+
+            // If Submit was NOT positive, status will be set to something else than '0'
+            submitRes = JSON.parse(submitRes);
+            if (submitRes && submitRes.status !== 0) {
+                abortCallback = true;           //< handling the error here
+                res.respondBasedOnResult(_session, req, submitRes);
+            }
+        }, function(status) {                   //< onLoadFinished
+            // Report about the Load, only if it was not already handled
             if (!abortCallback) {
                 if (status === "success") {
                     res.success(_session.getId());
                 } else {
                     _errors.handleFailedCommandEH(
                         _errors.FAILED_CMD_STATUS.UNKNOWN_ERROR,
-                        "Submit failed",
+                        "Submit succeded but Load Failed",
                         req,
                         res,
                         _session,
                         "WebElementReqHand");
                 }
             }
+        }, function() {
+            if (arguments.length === 0) {       //< onTimeout
+                // onsubmit didn't bubble up, but we should still return success
+                res.success(_session.getId());
+            } else {                            //< onError
+                _errors.handleFailedCommandEH(
+                    _errors.FAILED_CMD_STATUS.UNKNOWN_ERROR,
+                    "Submit failed: " + arguments[0],
+                    req,
+                    res,
+                    _session,
+                    "WebElementReqHand");
+            }
         });
-
-        // Submit
-        submitRes = _protoParent.getSessionCurrWindow.call(this, _session, req).evaluate(
-            require("./webdriver_atoms.js").get("submit"),
-            _getJSON());
-
-        // If Submit was NOT positive, status will be set to something else than '0'
-        submitRes = JSON.parse(submitRes);
-        if (submitRes && submitRes.status !== 0) {
-            abortCallback = true; //< handling the error here
-            res.respondBasedOnResult(_session, req, submitRes);
-        }
     },
 
     _postClickCommand = function(req, res) {
@@ -360,6 +442,25 @@ ghostdriver.WebElementReqHand = function(idOrElement, session) {
         throw _errors.createInvalidReqMissingCommandParameterEH(req);
     },
 
+    _getAttribute = function(currWindow, attributeName) {
+        var attributeValueAtom = require("./webdriver_atoms.js").get("get_attribute_value"),
+            result = currWindow.evaluate(
+                attributeValueAtom, // < Atom to read an attribute
+                _getJSON(),         // < Element to read from
+                attributeName);     // < Attribute to read
+
+        return JSON.parse(result).value;
+    },
+
+    _getTagName = function(currWindow) {
+        var result = currWindow.evaluate(
+                require("./webdriver_atoms.js").get("execute_script"),
+                "return arguments[0].tagName;",
+                [_getJSON()]);
+
+        return result.value;
+    },
+
     /**
      * This method can generate any Element JSON: just provide an ID.
      * Will return the one of the current Element if no ID is provided.
@@ -387,7 +488,8 @@ ghostdriver.WebElementReqHand = function(idOrElement, session) {
         getSession : _getSession,
         postValueCommand : _postValueCommand,
         getLocation : _getLocation,
-        getSize : _getSize
+        getLocationInView: _getLocationInView,
+        getSize: _getSize
     };
 };
 // prototype inheritance:

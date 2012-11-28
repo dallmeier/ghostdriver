@@ -1,7 +1,7 @@
 /*
-This file is part of the GhostDriver project from Neustar inc.
+This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 
-Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com / detronizator@gmail.com>
+Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 Copyright (c) 2012, Alex Anderson <@alxndrsn>
 All rights reserved.
 
@@ -31,7 +31,6 @@ var ghostdriver = ghostdriver || {};
 ghostdriver.SessionReqHand = function(session) {
     // private:
     var
-    _mousePos = {x: 0, y: 0},
     _session = session,
     _protoParent = ghostdriver.SessionReqHand.prototype,
     _locator = new ghostdriver.WebElementLocator(session),
@@ -330,7 +329,7 @@ ghostdriver.SessionReqHand = function(session) {
 
         if (currWindow.canGoBack) {
             currWindow.execFuncAndWaitForLoad(
-                function() { currWindow.back(); },
+                function() { currWindow.goBack(); },
                 successHand,
                 successHand); //< We don't care if 'back' fails
         } else {
@@ -345,7 +344,7 @@ ghostdriver.SessionReqHand = function(session) {
 
         if (currWindow.canGoForward) {
             currWindow.execFuncAndWaitForLoad(
-                function() { currWindow.forward(); },
+                function() { currWindow.goForward(); },
                 successHand,
                 successHand); //< We don't care if 'back' fails
         } else {
@@ -407,8 +406,8 @@ ghostdriver.SessionReqHand = function(session) {
 
             _protoParent.getSessionCurrWindow.call(this, _session, req).evaluate(
                 "function(script, args, timeout) { " +
-                    "return (" + require("./webdriver_atoms.js").get("execute_async_script") + ")( " +
-                        "script, args, timeout, callPhantom, true); " +
+                    "return (" + require("./webdriver_atoms.js").get("execute_async_script") + ")" +
+                        "(script, args, timeout, callPhantom, true); " +
                 "}",
                 postObj.script,
                 postObj.args,
@@ -456,9 +455,13 @@ ghostdriver.SessionReqHand = function(session) {
         var postObj = JSON.parse(req.post),
             currWindow = _protoParent.getSessionCurrWindow.call(this, _session, req);
 
+        // console.log("Session '"+ _session.getId() +"' is about to load URL: " + postObj.url);
+
         if (typeof(postObj) === "object" && postObj.url) {
             // Switch to the main frame first
             currWindow.switchToMainFrame();
+            // console.log("Session '"+ _session.getId() +"' has switched to the MainFrame");
+
             // Load URL and wait for load to finish (or timeout)
             currWindow.execFuncAndWaitForLoad(
                 function() {
@@ -592,17 +595,16 @@ ghostdriver.SessionReqHand = function(session) {
             if (elementSpecified) {
                 // Get Element's Location and add it to the coordinates
                 var requestHandler = new ghostdriver.WebElementReqHand(postObj.element, _session);
-                elementLocation = requestHandler.getLocation();
+                elementLocation = requestHandler.getLocationInView();
                 elementSize = requestHandler.getSize();
                 // If the Element has a valid location
                 if (elementLocation !== null) {
-                    coords.x += elementLocation.x;
-                    coords.y += elementLocation.y;
+                    coords.x = elementLocation.x;
+                    coords.y = elementLocation.y;
                 }
                 // console.log("element specified. initial coordinates (" + coords.x + "," + coords.y + ")");
             } else {
-                coords.x = _mousePos.x;
-                coords.y = _mousePos.y;
+                coords = _session.inputs.getCurrentCoordinates();
                 // console.log("no element specified. initial coordinates (" + coords.x + "," + coords.y + ")");
             }
 
@@ -618,8 +620,7 @@ ghostdriver.SessionReqHand = function(session) {
             }
 
             // Send the Mouse Move as native event
-            _protoParent.getSessionCurrWindow.call(this, _session, req).sendEvent("mousemove", coords.x, coords.y);
-            _mousePos = { x: coords.x, y: coords.y };
+            _session.inputs.mouseMove(_session, coords);
             res.success(_session.getId());
         } else {
             // Neither "element" nor "xoffset/yoffset" were provided
@@ -646,9 +647,7 @@ ghostdriver.SessionReqHand = function(session) {
                 mouseButton = (postObj.button === 2) ? "right" : (postObj.button === 1) ? "middle" : "left";
             }
             // Send the Mouse Click as native event
-            _protoParent.getSessionCurrWindow.call(this, _session, req).sendEvent(clickType,
-                _mousePos.x, _mousePos.y, //< x, y
-                mouseButton);
+            _session.inputs.mouseButtonClick(_session, clickType, mouseButton);
             res.success(_session.getId());
         } else {
             // Neither "element" nor "xoffset/yoffset" were provided

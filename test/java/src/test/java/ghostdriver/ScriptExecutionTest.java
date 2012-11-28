@@ -1,7 +1,7 @@
 /*
-This file is part of the GhostDriver project from Neustar inc.
+This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 
-Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com / detronizator@gmail.com>
+Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -88,6 +88,9 @@ public class ScriptExecutionTest extends BaseTest {
 
     @Test
     public void shouldBeAbleToExecuteMultipleAsyncScriptsSequentiallyWithNavigation() {
+        // NOTE: This test is supposed to fail!
+        // It's a reminder that there is some internal issue in PhantomJS still to address.
+
         WebDriver d = getDriver();
         d.manage().timeouts().setScriptTimeout(0, TimeUnit.MILLISECONDS);
 

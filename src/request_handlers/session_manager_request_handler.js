@@ -1,7 +1,7 @@
 /*
-This file is part of the GhostDriver project from Neustar inc.
+This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 
-Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com / detronizator@gmail.com>
+Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -65,6 +65,8 @@ ghostdriver.SessionManagerReqHand = function() {
             // Create and store a new Session
             newSession = new ghostdriver.Session(postObj.desiredCapabilities);
             _sessions[newSession.getId()] = newSession;
+
+            // console.log("New Session Created: " + newSession.getId());
 
             // Redirect to the newly created Session
             res.statusCode = 303; //< "303 See Other"

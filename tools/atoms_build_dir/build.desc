@@ -1,6 +1,6 @@
-# This file is part of the GhostDriver project from Neustar inc.
+# This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 #
-# Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com> - Neustar inc.
+# Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
@@ -121,6 +121,7 @@ js_deps(name = "build_atoms",
     "//javascript/webdriver/atoms:execute_async_script",
     "//javascript/webdriver/atoms:get_attribute",
     "//javascript/webdriver/atoms:get_location",
+    "//javascript/webdriver/atoms:get_location_in_view",
     "//javascript/webdriver/atoms:get_in_view_location",
     "//javascript/webdriver/atoms:get_window_size",
     "//javascript/webdriver/atoms:set_window_size",

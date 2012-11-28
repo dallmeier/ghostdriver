@@ -1,7 +1,7 @@
 /*
-This file is part of the GhostDriver project from Neustar inc.
+This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 
-Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com / detronizator@gmail.com>
+Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -28,18 +28,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Load dependencies
 // NOTE: We need to provide PhantomJS with the "require" module ASAP. This is a pretty s**t way to load dependencies
 var ghostdriver = {
-        system : require('system'),
-        hub    : require('./hub_register')
+        system  : require('system'),
+        hub     : require('./hub_register'),
+        version : "1.0.0"
     },
     server = require('webserver').create(),
     router,
-    parseURI;
+    parseURI,
+    listenOn,
+    listenOnIp = "127.0.0.1",
+    listenOnPort = "8910";
 
 // Enable "strict mode" for the 'parseURI' library
 parseURI = require("./third_party/parseuri.js");
 parseURI.options.strictMode = true;
 
 phantom.injectJs("session.js");
+phantom.injectJs("inputs.js");
 phantom.injectJs("request_handlers/request_handler.js");
 phantom.injectJs("request_handlers/status_request_handler.js");
 phantom.injectJs("request_handlers/shutdown_request_handler.js");
@@ -49,16 +54,34 @@ phantom.injectJs("request_handlers/webelement_request_handler.js");
 phantom.injectJs("request_handlers/router_request_handler.js");
 phantom.injectJs("webelementlocator.js");
 
-// HTTP Request Router
-router = new ghostdriver.RouterReqHand();
+try {
+    // HTTP Request Router
+    router = new ghostdriver.RouterReqHand();
 
-// Start the server
-if (server.listen(ghostdriver.system.args[1] || 8080, router.handle)) {
-    console.log('Ghost Driver running on port ' + server.port);
-    var reg = ghostdriver.hub.register;
-    if (ghostdriver.system.args[2])
-        reg(ghostdriver.system.args[1], ghostdriver.system.args[2]);
-} else {
-    console.error("ERROR: Could not start Ghost Driver");
-    phantom.exit();
+    // Check if parameters were given, regarding the "ip:port" to listen to
+    if (ghostdriver.system.args[1]) {
+        if (ghostdriver.system.args[1].indexOf(':') >= 0) {
+            listenOn = ghostdriver.system.args[1].split(':');
+            listenOnIp = listenOn[0];
+            listenOnPort = listenOn[1];
+        } else {
+            listenOnPort = ghostdriver.system.args[1];
+        }
+    }
+
+    // Start the server
+    if (server.listen(listenOnPort, router.handle)) {
+        console.log('Ghost Driver running on port ' + server.port);
+
+        // If parameters regarding a Selenium Grid HUB were given, register to it!
+        if (ghostdriver.system.args[2]) {
+            ghostdriver.hub.register(listenOnIp, listenOnPort, ghostdriver.system.args[2]);
+        }
+    } else {
+        throw new Error("ERROR: Could not start Ghost Driver");
+        phantom.exit(1);
+    }
+} catch (e) {
+    console.error(e);
+    phantom.exit(1);
 }

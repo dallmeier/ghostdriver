@@ -1,7 +1,7 @@
 /*
-This file is part of the GhostDriver project from Neustar inc.
+This file is part of the GhostDriver by Ivan De Marino <http://ivandemarino.me>.
 
-Copyright (c) 2012, Ivan De Marino <ivan.de.marino@gmail.com / detronizator@gmail.com>
+Copyright (c) 2012, Ivan De Marino <http://ivandemarino.me>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -32,9 +32,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.phantomjs.PhantomJSDriver;
+import org.openqa.selenium.phantomjs.PhantomJSDriverService;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
-import phantomjs.PhantomJSDriver;
 
 import java.io.FileReader;
 import java.io.IOException;
@@ -75,8 +76,21 @@ public abstract class BaseTest {
         sCaps = new DesiredCapabilities();
         sCaps.setJavascriptEnabled(true);
         sCaps.setCapability("takesScreenshot", false);
-        sCaps.setCapability(PhantomJSDriver.CAPABILITY_PHANTOMJS_BINARY, sConfig.getProperty("phantomjs_exec_path"));
-        sCaps.setCapability(PhantomJSDriver.CAPABILITY_PHANTOMJS_GHOSTDRIVER, sConfig.getProperty("phantomjs_driver_path"));
+
+        // Fetch configuration parameters
+        // "phantomjs_exec_path"
+        if (sConfig.getProperty("phantomjs_exec_path") != null) {
+            sCaps.setCapability(PhantomJSDriverService.PHANTOMJS_EXECUTABLE_PATH_PROPERTY, sConfig.getProperty("phantomjs_exec_path"));
+        } else {
+            throw new IOException(String.format("Property '%s' not set!", PhantomJSDriverService.PHANTOMJS_EXECUTABLE_PATH_PROPERTY));
+        }
+        // "phantomjs_driver_path"
+        if (sConfig.getProperty("phantomjs_driver_path") != null) {
+            System.out.println("Test will use an external GhostDriver");
+            sCaps.setCapability(PhantomJSDriverService.PHANTOMJS_GHOSTDRIVER_PATH_PROPERTY, sConfig.getProperty("phantomjs_driver_path"));
+        } else {
+            System.out.println("Test will use PhantomJS internal GhostDriver");
+        }
     }
 
     @Before
